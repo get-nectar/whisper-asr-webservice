@@ -52,6 +52,11 @@ async def index():
     return "/docs"
 
 
+@app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/asr", tags=["Endpoints"])
 async def asr(
     audio_file: UploadFile = File(...),  # noqa: B008
