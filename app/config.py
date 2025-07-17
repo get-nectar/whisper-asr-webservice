@@ -8,6 +8,7 @@ class CONFIG:
     Configuration class for ASR models.
     Reads environment variables for runtime configuration, with sensible defaults.
     """
+
     # Determine the ASR engine ('faster_whisper', 'openai_whisper' or 'whisperx')
     ASR_ENGINE = os.getenv("ASR_ENGINE", "openai_whisper")
 
@@ -45,3 +46,5 @@ class CONFIG:
     SUBTITLE_MAX_LINE_WIDTH = int(os.getenv("SUBTITLE_MAX_LINE_WIDTH", 1000))
     SUBTITLE_MAX_LINE_COUNT = int(os.getenv("SUBTITLE_MAX_LINE_COUNT", 2))
     SUBTITLE_HIGHLIGHT_WORDS = os.getenv("SUBTITLE_HIGHLIGHT_WORDS", "false").lower() == "true"
+
+    API_KEY = os.getenv("API_KEY", "")

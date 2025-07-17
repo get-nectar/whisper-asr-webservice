@@ -1,12 +1,14 @@
 import importlib.metadata
+import io
 import os
 from os import path
 from typing import Annotated, Optional, Union
 from urllib.parse import quote
 
 import click
+import requests
 import uvicorn
-from fastapi import FastAPI, File, Query, UploadFile, applications
+from fastapi import FastAPI, File, Query, UploadFile, applications, Request, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +47,19 @@ if path.exists(assets_path + "/swagger-ui.css") and path.exists(assets_path + "/
         )
 
     applications.get_swagger_ui_html = swagger_monkey_patch
+
+
+# pre-request hook for authentication
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if request.url.path.startswith("/"):
+        return await call_next(request)
+
+    # check if the request header contains the correct token
+    if request.headers.get("Authorization") != f"Bearer {CONFIG.API_KEY}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return await call_next(request)
 
 
 @app.get("/", response_class=RedirectResponse, include_in_schema=False)
@@ -110,6 +125,28 @@ async def asr(
             "Asr-Engine": CONFIG.ASR_ENGINE,
             "Content-Disposition": f'attachment; filename="{quote(audio_file.filename)}.{output}"',
         },
+    )
+
+
+@app.post("/asr-source-uri", tags=["Endpoints"])
+async def asr_source_uri(
+    source_uri: str = Query(description="Source URI of the audio file"),
+):
+    audio_file = requests.get(source_uri)
+    audio_file = io.BytesIO(audio_file.content)
+    result = asr_model.transcribe(
+        load_audio(audio_file.file, True),
+        "transcribe",
+        None,
+        None,
+        False,
+        False,
+        None,
+        "json",
+    )
+    return StreamingResponse(
+        result,
+        media_type="application/json",
     )
 
 
