@@ -12,6 +12,7 @@ from fastapi import FastAPI, File, Query, UploadFile, applications, Request, HTT
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from whisper import tokenizer
 
 from app.config import CONFIG
@@ -128,14 +129,16 @@ async def asr(
     )
 
 
+class SourceUriBody(BaseModel):
+    source_uri: str
+
+
 @app.post("/asr-source-uri", tags=["Endpoints"])
-async def asr_source_uri(
-    source_uri: str = Query(description="Source URI of the audio file"),
-):
-    audio_file = requests.get(source_uri)
+async def asr_source_uri(body: SourceUriBody):
+    audio_file = requests.get(body.source_uri)
     audio_file = io.BytesIO(audio_file.content)
     result = asr_model.transcribe(
-        load_audio(audio_file.file, True),
+        load_audio(audio_file, True),
         "transcribe",
         None,
         None,
