@@ -143,7 +143,7 @@ async def asr_source_uri(body: SourceUriBody):
         None,
         None,
         False,
-        False,
+        True,
         None,
         "json",
     )

@@ -49,6 +49,8 @@ class OpenAIWhisperASR(ASRModel):
         with self.model_lock:
             result = self.model.transcribe(audio, **options_dict)
 
+        result["duration"] = audio.duration
+
         output_file = StringIO()
         self.write_result(result, output_file, output)
         output_file.seek(0)
