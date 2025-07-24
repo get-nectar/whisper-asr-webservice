@@ -147,12 +147,8 @@ async def asr_source_uri(body: SourceUriBody):
         None,
         "json",
     )
-    result["duration"] = 0
 
-    return StreamingResponse(
-        result,
-        media_type="application/json",
-    )
+    return StreamingResponse(result, media_type="application/json", headers={"Asr-Engine": CONFIG.ASR_ENGINE})
 
 
 @app.post("/detect-language", tags=["Endpoints"])
