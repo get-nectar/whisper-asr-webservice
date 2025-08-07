@@ -50,7 +50,7 @@ ENV ASR_ENGINE=faster_whisper
 
 # Pre-download the Whisper model during build
 RUN mkdir -p /app/.cache/whisper
-RUN python scripts/download_model.py
+RUN $POETRY_VENV/bin/python scripts/download_model.py
 
 EXPOSE 9000
 
