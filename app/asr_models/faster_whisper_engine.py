@@ -37,6 +37,7 @@ class FasterWhisperASR(ASRModel):
     ):
         self.last_activity_time = time.time()
 
+        # Ensure model is loaded (only lock for model loading)
         with self.model_lock:
             if self.model is None:
                 self.load_model()
@@ -50,7 +51,9 @@ class FasterWhisperASR(ASRModel):
             options_dict["vad_filter"] = True
         if word_timestamps:
             options_dict["word_timestamps"] = True
-        with self.model_lock:
+            
+        # Use semaphore to limit concurrent GPU operations instead of exclusive lock
+        with self.request_semaphore:
             segments = []
             text = ""
             segment_generator, info = self.model.transcribe(audio, beam_size=5, **options_dict)
@@ -69,14 +72,16 @@ class FasterWhisperASR(ASRModel):
 
         self.last_activity_time = time.time()
 
+        # Ensure model is loaded (only lock for model loading)
         with self.model_lock:
-            if self.model is None: self.load_model()
+            if self.model is None: 
+                self.load_model()
 
         # load audio and pad/trim it to fit 30 seconds
         audio = whisper.pad_or_trim(audio)
 
-        # detect the spoken language
-        with self.model_lock:
+        # detect the spoken language using semaphore for concurrency
+        with self.request_semaphore:
             segments, info = self.model.transcribe(audio, beam_size=5)
             detected_lang_code = info.language
             detected_language_confidence = info.language_probability

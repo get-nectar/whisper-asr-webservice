@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import aiohttp
 import click
+import torch
 import uvicorn
 from fastapi import FastAPI, File, Query, UploadFile, applications, Request, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -96,12 +97,32 @@ async def ready():
     """Check if the service is ready to process requests (model loaded)"""
     if asr_model.model is None:
         return {"ready": False, "message": "Model not loaded"}, 503
+    
+    # Get GPU and concurrency info
+    gpu_info = {}
+    if hasattr(asr_model, 'get_max_concurrent_requests'):
+        max_concurrent = asr_model.get_max_concurrent_requests()
+        semaphore = asr_model.get_request_semaphore()
+        current_available = semaphore._value
+        current_active = max_concurrent - current_available
+        
+        gpu_info = {
+            "max_concurrent_requests": max_concurrent,
+            "active_requests": current_active,
+            "available_slots": current_available
+        }
+        
+        if torch.cuda.is_available():
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            gpu_info["gpu_memory_gb"] = round(gpu_memory, 1)
+    
     return {
         "ready": True, 
         "engine": CONFIG.ASR_ENGINE,
         "model": CONFIG.MODEL_NAME,
         "device": CONFIG.DEVICE,
-        "quantization": CONFIG.MODEL_QUANTIZATION
+        "quantization": CONFIG.MODEL_QUANTIZATION,
+        **gpu_info
     }
 
 
