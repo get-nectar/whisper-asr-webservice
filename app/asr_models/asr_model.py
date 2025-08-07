@@ -42,9 +42,14 @@ class ASRModel(ABC):
                 available_memory = (gpu_memory_gb - 2) * 0.8
                 max_models = max(1, int(available_memory / model_memory_gb))
                 
-                # L4 has 24GB, so for base model: (24-2)*0.8/2 = ~8 concurrent requests
-                # But limit to 6 for safety and optimal performance
-                cls._max_concurrent_requests = min(max_models, 6)
+                # L4 optimization: Use more aggressive concurrency for better memory utilization
+                # L4 has 24GB, base model ~2GB, but faster-whisper uses less memory
+                if gpu_memory_gb > 20:  # L4 GPU detected
+                    # Be more aggressive with L4's large memory
+                    cls._max_concurrent_requests = min(max_models, 8)
+                    print(f"🎯 L4 GPU: Enabling high concurrency mode ({cls._max_concurrent_requests} concurrent)")
+                else:
+                    cls._max_concurrent_requests = min(max_models, 4)
                 print(f"🚀 GPU Memory: {gpu_memory_gb:.1f}GB, Model: {CONFIG.MODEL_NAME} (~{model_memory_gb}GB)")
                 print(f"🎯 Max concurrent requests: {cls._max_concurrent_requests}")
             else:

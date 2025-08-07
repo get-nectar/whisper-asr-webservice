@@ -28,7 +28,9 @@ try:
         model_size_or_path=CONFIG.MODEL_NAME,
         device="cpu",  # Use CPU during build to avoid GPU requirements
         compute_type="int8",  # Use int8 during build for efficiency
-        download_root=CONFIG.MODEL_PATH
+        download_root=CONFIG.MODEL_PATH,
+        cpu_threads=4,  # Optimize for container build
+        num_workers=1   # Single worker during build
     )
     
     print(f"✅ Model '{CONFIG.MODEL_NAME}' successfully downloaded to {CONFIG.MODEL_PATH}")

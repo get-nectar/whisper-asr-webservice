@@ -43,10 +43,12 @@ COPY --from=swagger-ui /usr/share/nginx/html/swagger-ui-bundle.js swagger-ui-ass
 RUN poetry install
 RUN $POETRY_VENV/bin/pip install torch==2.6.0+cu126 torchaudio==2.6.0+cu126 --index-url https://download.pytorch.org/whl/cu126
 
-# Set environment variables for model pre-download
+# Set environment variables for model pre-download and L4 optimization
 ENV ASR_MODEL_PATH=/app/.cache/whisper
 ENV ASR_MODEL=base
 ENV ASR_ENGINE=faster_whisper
+ENV ASR_QUANTIZATION=float16
+ENV ASR_DEVICE=cuda
 
 # Pre-download the Whisper model during build
 RUN mkdir -p /app/.cache/whisper

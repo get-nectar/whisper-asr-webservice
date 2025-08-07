@@ -44,6 +44,7 @@ app = FastAPI(
     license_info={"name": "MIT License", "url": projectMetadata["License"]},
 )
 
+
 @app.on_event("startup")
 async def startup_event():
     print("🔧 Running startup checks...")
@@ -52,7 +53,36 @@ async def startup_event():
         asr_model.load_model()
     else:
         print("✅ Model confirmed loaded and ready!")
+    
+    # Force GPU memory pre-allocation for consistent performance
+    if CONFIG.DEVICE == "cuda" and torch.cuda.is_available():
+        print("🚀 Pre-allocating GPU memory for consistent P99 performance...")
+        try:
+            # Allocate memory for maximum concurrent requests
+            max_concurrent = asr_model.get_max_concurrent_requests()
+            
+            # Force PyTorch to allocate memory upfront
+            torch.cuda.empty_cache()
+            
+            # Pre-allocate tensor memory based on expected workload
+            estimated_memory_per_request = 2.0  # GB per request (conservative)
+            total_memory_to_allocate = max_concurrent * estimated_memory_per_request * 0.8  # 80% to be safe
+            
+            # Create a large tensor to force memory allocation
+            memory_bytes = int(total_memory_to_allocate * 1024**3 / 4)  # Divide by 4 for float32
+            if memory_bytes > 0:
+                dummy_tensor = torch.zeros(memory_bytes, dtype=torch.float32, device='cuda')
+                del dummy_tensor  # Free but keep memory reserved
+                
+            allocated = torch.cuda.memory_allocated(0) / (1024**3)
+            reserved = torch.cuda.memory_reserved(0) / (1024**3)
+            print(f"✅ GPU memory pre-allocated - Reserved: {reserved:.2f}GB, Allocated: {allocated:.2f}GB")
+            
+        except Exception as e:
+            print(f"⚠️  GPU memory pre-allocation failed (continuing anyway): {e}")
+    
     print(f"🎯 Service ready on device: {CONFIG.DEVICE}")
+
 
 assets_path = os.getcwd() + "/swagger-ui-assets"
 if path.exists(assets_path + "/swagger-ui.css") and path.exists(assets_path + "/swagger-ui-bundle.js"):
@@ -92,12 +122,13 @@ async def index():
 async def health():
     return {"status": "ok"}
 
+
 @app.get("/ready", tags=["Health"])
 async def ready():
     """Check if the service is ready to process requests (model loaded)"""
     if asr_model.model is None:
         return {"ready": False, "message": "Model not loaded"}, 503
-    
+
     # Get GPU and concurrency info
     gpu_info = {}
     if hasattr(asr_model, 'get_max_concurrent_requests'):
@@ -105,24 +136,24 @@ async def ready():
         semaphore = asr_model.get_request_semaphore()
         current_available = semaphore._value
         current_active = max_concurrent - current_available
-        
+
         gpu_info = {
             "max_concurrent_requests": max_concurrent,
             "active_requests": current_active,
-            "available_slots": current_available
+            "available_slots": current_available,
         }
-        
+
         if torch.cuda.is_available():
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             gpu_info["gpu_memory_gb"] = round(gpu_memory, 1)
-    
+
     return {
-        "ready": True, 
+        "ready": True,
         "engine": CONFIG.ASR_ENGINE,
         "model": CONFIG.MODEL_NAME,
         "device": CONFIG.DEVICE,
         "quantization": CONFIG.MODEL_QUANTIZATION,
-        **gpu_info
+        **gpu_info,
     }
 
 
@@ -197,9 +228,9 @@ async def asr_source_uri(body: SourceUriBody):
     result = asr_model.transcribe(
         audio_data,
         "transcribe",
+        "en",  # Skip language detection for faster processing
         None,
-        None,
-        False,
+        True,
         True,
         None,
         "json",
