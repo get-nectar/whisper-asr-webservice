@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from dataclasses import asdict
@@ -94,7 +95,7 @@ class WriteJSON(ResultWriter):
         json.dump(result, file)
 
 
-def load_audio(file: BinaryIO, encode=True, sr: int = CONFIG.SAMPLE_RATE):
+async def load_audio(file: BinaryIO, encode=True, sr: int = CONFIG.SAMPLE_RATE):
     """
     Open an audio file object and read as mono waveform, resampling as necessary.
     Modified from https://github.com/openai/whisper/blob/main/whisper/audio.py to accept a file object
@@ -112,16 +113,41 @@ def load_audio(file: BinaryIO, encode=True, sr: int = CONFIG.SAMPLE_RATE):
     """
     if encode:
         try:
-            # This launches a subprocess to decode audio while down-mixing and resampling as necessary.
+            # This launches an async subprocess to decode audio while down-mixing and resampling as necessary.
             # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
-            out, _ = (
+            ffmpeg_cmd = (
                 ffmpeg.input("pipe:", threads=0)
                 .filter("atempo", 2.0)
                 .output("-", format="s16le", acodec="pcm_s16le", ac=1, ar=sr)
-                .run(cmd="ffmpeg", capture_stdout=True, capture_stderr=True, input=file.read())
+                .compile(cmd="ffmpeg")
             )
-        except ffmpeg.Error as e:
-            raise RuntimeError(f"Failed to load audio: {e.stderr.decode()}") from e
+            
+            process = await asyncio.create_subprocess_exec(
+                *ffmpeg_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            # Read file content once at the beginning
+            file_content = file.read()
+            if not file_content:
+                raise RuntimeError("Audio file is empty or could not be read")
+            
+            out, stderr = await process.communicate(input=file_content)
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown FFmpeg error"
+                raise RuntimeError(f"FFmpeg failed with return code {process.returncode}: {error_msg}")
+                
+        except asyncio.TimeoutError:
+            raise RuntimeError("Audio processing timed out")
+        except FileNotFoundError:
+            raise RuntimeError("FFmpeg executable not found. Please ensure FFmpeg is installed.")
+        except Exception as e:
+            if "FFmpeg failed" in str(e):
+                raise
+            raise RuntimeError(f"Failed to load audio: {str(e)}") from e
     else:
         out = file.read()
 

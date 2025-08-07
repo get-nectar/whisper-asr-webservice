@@ -5,8 +5,8 @@ from os import path
 from typing import Annotated, Optional, Union
 from urllib.parse import quote
 
+import aiohttp
 import click
-import requests
 import uvicorn
 from fastapi import FastAPI, File, Query, UploadFile, applications, Request, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -109,8 +109,9 @@ async def asr(
     ),
     output: Union[str, None] = Query(default="txt", enum=["txt", "vtt", "srt", "tsv", "json"]),
 ):
+    audio_data = await load_audio(audio_file.file, encode)
     result = asr_model.transcribe(
-        load_audio(audio_file.file, encode),
+        audio_data,
         task,
         language,
         initial_prompt,
@@ -135,10 +136,13 @@ class SourceUriBody(BaseModel):
 
 @app.post("/asr-source-uri", tags=["Endpoints"])
 async def asr_source_uri(body: SourceUriBody):
-    audio_file_raw = requests.get(body.source_uri)
-    audio_file = io.BytesIO(audio_file_raw.content)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(body.source_uri) as response:
+            audio_file_raw = await response.read()
+    audio_file = io.BytesIO(audio_file_raw)
+    audio_data = await load_audio(audio_file, True)
     result = asr_model.transcribe(
-        load_audio(audio_file, True),
+        audio_data,
         "transcribe",
         None,
         None,
@@ -156,7 +160,8 @@ async def detect_language(
     audio_file: UploadFile = File(...),  # noqa: B008
     encode: bool = Query(default=True, description="Encode audio first through FFmpeg"),
 ):
-    detected_lang_code, confidence = asr_model.language_detection(load_audio(audio_file.file, encode))
+    audio_data = await load_audio(audio_file.file, encode)
+    detected_lang_code, confidence = asr_model.language_detection(audio_data)
     return {
         "detected_language": tokenizer.LANGUAGES[detected_lang_code],
         "language_code": detected_lang_code,

@@ -30,8 +30,8 @@ class CONFIG:
     #   'float32' - 32-bit floating-point precision (higher precision, slower inference)
     #   'float16' - 16-bit floating-point precision (lower precision, faster inference)
     #   'int8' - 8-bit integer precision (lowest precision, fastest inference)
-    # Defaults to 'float32' for GPU availability, 'int8' for CPU.
-    MODEL_QUANTIZATION = os.getenv("ASR_QUANTIZATION", "float32" if torch.cuda.is_available() else "int8")
+    # Defaults to 'float16' for GPU availability, 'int8' for CPU.
+    MODEL_QUANTIZATION = os.getenv("ASR_QUANTIZATION", "float16" if torch.cuda.is_available() else "int8")
     if MODEL_QUANTIZATION not in {"float32", "float16", "int8"}:
         raise ValueError("Invalid MODEL_QUANTIZATION. Choose 'float32', 'float16', or 'int8'.")
 
