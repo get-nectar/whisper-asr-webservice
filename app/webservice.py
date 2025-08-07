@@ -19,8 +19,17 @@ from app.config import CONFIG
 from app.factory.asr_model_factory import ASRModelFactory
 from app.utils import load_audio
 
+print(f"🚀 Starting Whisper ASR Service...")
+print(f"Engine: {CONFIG.ASR_ENGINE}")
+print(f"Model: {CONFIG.MODEL_NAME}")
+print(f"Device: {CONFIG.DEVICE}")
+print(f"Quantization: {CONFIG.MODEL_QUANTIZATION}")
+print(f"Model Path: {CONFIG.MODEL_PATH}")
+
 asr_model = ASRModelFactory.create_asr_model()
+print("📥 Loading model...")
 asr_model.load_model()
+print("✅ Model loaded successfully!")
 
 LANGUAGE_CODES = sorted(tokenizer.LANGUAGES.keys())
 
@@ -33,6 +42,16 @@ app = FastAPI(
     swagger_ui_parameters={"defaultModelsExpandDepth": -1},
     license_info={"name": "MIT License", "url": projectMetadata["License"]},
 )
+
+@app.on_event("startup")
+async def startup_event():
+    print("🔧 Running startup checks...")
+    if asr_model.model is None:
+        print("⚠️  Warning: Model not loaded, forcing load...")
+        asr_model.load_model()
+    else:
+        print("✅ Model confirmed loaded and ready!")
+    print(f"🎯 Service ready on device: {CONFIG.DEVICE}")
 
 assets_path = os.getcwd() + "/swagger-ui-assets"
 if path.exists(assets_path + "/swagger-ui.css") and path.exists(assets_path + "/swagger-ui-bundle.js"):
@@ -71,6 +90,19 @@ async def index():
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+
+@app.get("/ready", tags=["Health"])
+async def ready():
+    """Check if the service is ready to process requests (model loaded)"""
+    if asr_model.model is None:
+        return {"ready": False, "message": "Model not loaded"}, 503
+    return {
+        "ready": True, 
+        "engine": CONFIG.ASR_ENGINE,
+        "model": CONFIG.MODEL_NAME,
+        "device": CONFIG.DEVICE,
+        "quantization": CONFIG.MODEL_QUANTIZATION
+    }
 
 
 @app.post("/asr", tags=["Endpoints"])
