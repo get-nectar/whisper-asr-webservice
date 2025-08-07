@@ -220,9 +220,74 @@ class SourceUriBody(BaseModel):
 
 @app.post("/asr-source-uri", tags=["Endpoints"])
 async def asr_source_uri(body: SourceUriBody):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(body.source_uri) as response:
-            audio_file_raw = await response.read()
+    import asyncio
+    
+    # Configure timeout and connection settings
+    timeout = aiohttp.ClientTimeout(
+        total=300,  # 5 minutes total timeout
+        connect=30,  # 30 seconds to establish connection
+        sock_read=60  # 60 seconds for reading data
+    )
+    
+    connector = aiohttp.TCPConnector(
+        limit=100,  # Connection pool limit
+        limit_per_host=30,  # Connections per host
+        keepalive_timeout=60,  # Keep connections alive
+        enable_cleanup_closed=True
+    )
+    
+    try:
+        async with aiohttp.ClientSession(
+            timeout=timeout, 
+            connector=connector,
+            headers={"User-Agent": "Whisper-ASR-WebService/1.0"}
+        ) as session:
+            print(f"🌐 Downloading audio from: {body.source_uri}")
+            
+            # Add retry logic for failed downloads
+            for attempt in range(3):  # 3 attempts
+                try:
+                    async with session.get(body.source_uri) as response:
+                        if response.status != 200:
+                            raise HTTPException(
+                                status_code=400, 
+                                detail=f"Failed to download audio: HTTP {response.status}"
+                            )
+                        
+                        # Check content type
+                        content_type = response.headers.get('content-type', '')
+                        if not any(audio_type in content_type.lower() for audio_type in 
+                                  ['audio/', 'video/', 'application/octet-stream']):
+                            print(f"⚠️  Warning: Unexpected content type: {content_type}")
+                        
+                        # Read audio data
+                        audio_file_raw = await response.read()
+                        print(f"✅ Downloaded {len(audio_file_raw)} bytes")
+                        break
+                        
+                except asyncio.TimeoutError:
+                    if attempt == 2:  # Last attempt
+                        raise HTTPException(
+                            status_code=408, 
+                            detail=f"Timeout downloading audio from {body.source_uri}"
+                        )
+                    print(f"⏰ Timeout on attempt {attempt + 1}, retrying...")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    
+                except Exception as e:
+                    if attempt == 2:  # Last attempt
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Error downloading audio: {str(e)}"
+                        )
+                    print(f"❌ Error on attempt {attempt + 1}: {e}")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
     audio_file = io.BytesIO(audio_file_raw)
     audio_data = await load_audio(audio_file, True)
     result = asr_model.transcribe(
