@@ -145,7 +145,12 @@ class FasterWhisperASR(ASRModel):
             print(
                 f"✅ Thread {current_thread}: Transcription complete ({len(segments)} segments, {transcription_time:.2f}s, RTF: {rtf:.2f}x)"
             )
-            result = {"language": options_dict.get("language", info.language), "segments": segments, "text": text}
+            result = {
+                "language": options_dict.get("language", info.language),
+                "segments": segments,
+                "text": text,
+                "audio_duration": audio_duration * 2,
+            }
 
         output_file = StringIO()
         self.write_result(result, output_file, output)
