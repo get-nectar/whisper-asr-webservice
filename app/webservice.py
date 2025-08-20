@@ -240,7 +240,11 @@ async def asr_source_uri(body: SourceUriBody):
         async with aiohttp.ClientSession(
             timeout=timeout, 
             connector=connector,
-            headers={"User-Agent": "Whisper-ASR-WebService/1.0"}
+            headers={
+                "User-Agent": "Whisper-ASR-WebService/1.0",
+                "Referer": "https://whisper.nectarsocial.com",
+                "Origin": "https://whisper.nectarsocial.com"
+            }
         ) as session:
             print(f"🌐 Downloading audio from: {body.source_uri}")
             
