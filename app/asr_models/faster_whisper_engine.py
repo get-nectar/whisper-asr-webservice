@@ -42,7 +42,12 @@ class FasterWhisperASR(ASRModel):
 
         self.model = WhisperModel(**model_kwargs)
 
-        # Pre-warm the model with dummy audio to allocate GPU memory
+        # Load tiny model for fast language detection
+        self.language_detector = WhisperModel(
+            "tiny", device=CONFIG.DEVICE, compute_type=CONFIG.MODEL_QUANTIZATION, download_root=CONFIG.MODEL_PATH
+        )
+
+        # Pre-warm both models
         self._warmup_model()
 
         Thread(target=self.monitor_idleness, daemon=True).start()
@@ -69,14 +74,30 @@ class FasterWhisperASR(ASRModel):
             # Consume the generator to ensure full allocation
             list(segment_generator)
 
+            # Also warm up the language detector
+            lang_segment_generator, _ = self.language_detector.transcribe(dummy_audio, beam_size=1)
+            list(lang_segment_generator)
+
             # Check GPU memory allocation
             if torch.cuda.is_available():
                 allocated = torch.cuda.memory_allocated(0) / (1024**3)
                 cached = torch.cuda.memory_reserved(0) / (1024**3)
-                print(f"✅ Model warmed up - GPU allocated: {allocated:.2f}GB, reserved: {cached:.2f}GB")
+                print(f"✅ Models warmed up - GPU allocated: {allocated:.2f}GB, reserved: {cached:.2f}GB")
 
         except Exception as e:
             print(f"⚠️ Model warmup failed (continuing anyway): {e}")
+
+    def fast_language_detection(self, audio):
+        """Fast language detection using tiny model"""
+        # Use first 1 second for quick detection
+        sample = audio[:16000]
+
+        try:
+            _, info = self.language_detector.transcribe(sample, beam_size=1, best_of=1, temperature=0.0)
+            return info.language, info.language_probability
+        except Exception as e:
+            print(f"⚠️ Fast language detection failed, defaulting to 'en': {e}")
+            return 'en', 1.0
 
     def transcribe(
         self,
@@ -95,6 +116,11 @@ class FasterWhisperASR(ASRModel):
         with self.model_lock:
             if self.model is None:
                 self.load_model()
+
+        # Use fast language detection if language not provided
+        if language is None:
+            detected_lang, confidence = self.fast_language_detection(audio)
+            language = detected_lang if confidence > 0.7 else 'en'
 
         options_dict = {"task": task}
         if language:

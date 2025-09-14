@@ -53,34 +53,34 @@ async def startup_event():
         asr_model.load_model()
     else:
         print("✅ Model confirmed loaded and ready!")
-    
+
     # Force GPU memory pre-allocation for consistent performance
     if CONFIG.DEVICE == "cuda" and torch.cuda.is_available():
         print("🚀 Pre-allocating GPU memory for consistent P99 performance...")
         try:
             # Allocate memory for maximum concurrent requests
             max_concurrent = asr_model.get_max_concurrent_requests()
-            
+
             # Force PyTorch to allocate memory upfront
             torch.cuda.empty_cache()
-            
+
             # Pre-allocate tensor memory based on expected workload
             estimated_memory_per_request = 2.0  # GB per request (conservative)
             total_memory_to_allocate = max_concurrent * estimated_memory_per_request * 0.8  # 80% to be safe
-            
+
             # Create a large tensor to force memory allocation
             memory_bytes = int(total_memory_to_allocate * 1024**3 / 4)  # Divide by 4 for float32
             if memory_bytes > 0:
                 dummy_tensor = torch.zeros(memory_bytes, dtype=torch.float32, device='cuda')
                 del dummy_tensor  # Free but keep memory reserved
-                
+
             allocated = torch.cuda.memory_allocated(0) / (1024**3)
             reserved = torch.cuda.memory_reserved(0) / (1024**3)
             print(f"✅ GPU memory pre-allocated - Reserved: {reserved:.2f}GB, Allocated: {allocated:.2f}GB")
-            
+
         except Exception as e:
             print(f"⚠️  GPU memory pre-allocation failed (continuing anyway): {e}")
-    
+
     print(f"🎯 Service ready on device: {CONFIG.DEVICE}")
 
 
@@ -221,79 +221,72 @@ class SourceUriBody(BaseModel):
 @app.post("/asr-source-uri", tags=["Endpoints"])
 async def asr_source_uri(body: SourceUriBody):
     import asyncio
-    
+
     # Configure timeout and connection settings
     timeout = aiohttp.ClientTimeout(
         total=300,  # 5 minutes total timeout
         connect=30,  # 30 seconds to establish connection
-        sock_read=60  # 60 seconds for reading data
+        sock_read=60,  # 60 seconds for reading data
     )
-    
+
     connector = aiohttp.TCPConnector(
         limit=100,  # Connection pool limit
         limit_per_host=30,  # Connections per host
         keepalive_timeout=60,  # Keep connections alive
-        enable_cleanup_closed=True
+        enable_cleanup_closed=True,
     )
-    
+
     try:
         async with aiohttp.ClientSession(
-            timeout=timeout, 
-            connector=connector,
-            headers={"User-Agent": "Whisper-ASR-WebService/1.0"}
+            timeout=timeout, connector=connector, headers={"User-Agent": "Whisper-ASR-WebService/1.0"}
         ) as session:
             print(f"🌐 Downloading audio from: {body.source_uri}")
-            
+
             # Add retry logic for failed downloads
             for attempt in range(3):  # 3 attempts
                 try:
                     async with session.get(body.source_uri) as response:
                         if response.status != 200:
                             raise HTTPException(
-                                status_code=400, 
-                                detail=f"Failed to download audio: HTTP {response.status}"
+                                status_code=400, detail=f"Failed to download audio: HTTP {response.status}"
                             )
-                        
+
                         # Check content type
                         content_type = response.headers.get('content-type', '')
-                        if not any(audio_type in content_type.lower() for audio_type in 
-                                  ['audio/', 'video/', 'application/octet-stream']):
+                        if not any(
+                            audio_type in content_type.lower()
+                            for audio_type in ['audio/', 'video/', 'application/octet-stream']
+                        ):
                             print(f"⚠️  Warning: Unexpected content type: {content_type}")
-                        
+
                         # Read audio data
                         audio_file_raw = await response.read()
                         print(f"✅ Downloaded {len(audio_file_raw)} bytes")
                         break
-                        
+
                 except asyncio.TimeoutError:
                     if attempt == 2:  # Last attempt
-                        raise HTTPException(
-                            status_code=408, 
-                            detail=f"Timeout downloading audio from {body.source_uri}"
-                        )
+                        raise HTTPException(status_code=408, detail=f"Timeout downloading audio from {body.source_uri}")
                     print(f"⏰ Timeout on attempt {attempt + 1}, retrying...")
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
+
                 except Exception as e:
                     if attempt == 2:  # Last attempt
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Error downloading audio: {str(e)}"
-                        )
+                        raise HTTPException(status_code=400, detail=f"Error downloading audio: {str(e)}")
                     print(f"❌ Error on attempt {attempt + 1}: {e}")
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-    
+
     audio_file = io.BytesIO(audio_file_raw)
     audio_data = await load_audio(audio_file, True)
     result = asr_model.transcribe(
         audio_data,
         "transcribe",
-        "en",  # Skip language detection for faster processing
+        None,
         None,
         True,
         True,
