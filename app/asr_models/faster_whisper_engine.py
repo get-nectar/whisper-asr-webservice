@@ -90,7 +90,7 @@ class FasterWhisperASR(ASRModel):
     def fast_language_detection(self, audio):
         """Fast language detection using tiny model"""
         # Use first 1 second for quick detection
-        sample = audio[:16000]
+        sample = audio[:80000]
 
         try:
             _, info = self.language_detector.transcribe(sample, beam_size=1, best_of=1, temperature=0.0)
