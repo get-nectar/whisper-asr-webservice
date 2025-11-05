@@ -11,7 +11,9 @@ ENV POETRY_VENV=/app/.venv
 RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get -qq update \
     && apt-get -qq install --no-install-recommends \
+    build-essential \
     python${PYTHON_VERSION} \
+    python${PYTHON_VERSION}-dev \
     python${PYTHON_VERSION}-venv \
     python3-pip \
     libcudnn8 \
