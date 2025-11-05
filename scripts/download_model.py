@@ -24,14 +24,23 @@ try:
     
     # Download the model (this will cache it to MODEL_PATH)
     print("Downloading model... This may take a few minutes.")
-    model = WhisperModel(
-        model_size_or_path=CONFIG.MODEL_NAME,
-        device="cpu",  # Use CPU during build to avoid GPU requirements
-        compute_type="int8",  # Use int8 during build for efficiency
-        download_root=CONFIG.MODEL_PATH,
-        cpu_threads=4,  # Optimize for container build
-        num_workers=1   # Single worker during build
-    )
+
+    # Prepare model kwargs with HF token if available
+    model_kwargs = {
+        "model_size_or_path": CONFIG.MODEL_NAME,
+        "device": "cpu",  # Use CPU during build to avoid GPU requirements
+        "compute_type": "int8",  # Use int8 during build for efficiency
+        "download_root": CONFIG.MODEL_PATH,
+        "cpu_threads": 4,  # Optimize for container build
+        "num_workers": 1   # Single worker during build
+    }
+
+    # Add HF token if provided (for private/gated models)
+    if CONFIG.HF_TOKEN:
+        print("Using Hugging Face authentication token")
+        model_kwargs["token"] = CONFIG.HF_TOKEN
+
+    model = WhisperModel(**model_kwargs)
     
     print(f"✅ Model '{CONFIG.MODEL_NAME}' successfully downloaded to {CONFIG.MODEL_PATH}")
     print(f"Model files:")

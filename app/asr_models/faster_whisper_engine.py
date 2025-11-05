@@ -171,11 +171,31 @@ class FasterWhisperASR(ASRModel):
             print(
                 f"✅ Thread {current_thread}: Transcription complete ({len(segments)} segments, {transcription_time:.2f}s, RTF: {rtf:.2f}x)"
             )
+
+            # Calculate overall confidence score
+            overall_confidence = 0.0
+            if segments:
+                # Try to use word-level probabilities if available (when word_timestamps=True)
+                total_words = 0
+                total_probability = 0.0
+
+                for segment in segments:
+                    if hasattr(segment, 'words') and segment.words:
+                        for word in segment.words:
+                            if hasattr(word, 'probability'):
+                                total_probability += word.probability
+                                total_words += 1
+
+                # If word-level probabilities are available, use them
+                if total_words > 0:
+                    overall_confidence = total_probability / total_words
+
             result = {
                 "language": options_dict.get("language", info.language),
                 "segments": segments,
                 "text": text,
                 "audio_duration": audio_duration * 2,
+                "confidence": overall_confidence,
             }
 
         output_file = StringIO()
