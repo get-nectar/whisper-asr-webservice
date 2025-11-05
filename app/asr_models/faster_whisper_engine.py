@@ -24,6 +24,9 @@ class FasterWhisperASR(ASRModel):
             "download_root": CONFIG.MODEL_PATH,
         }
 
+        if CONFIG.HF_TOKEN:
+            model_kwargs["use_auth_token"] = CONFIG.HF_TOKEN
+
         # Add L4-specific optimizations
         if torch.cuda.is_available():
             model_kwargs.update(
@@ -43,9 +46,16 @@ class FasterWhisperASR(ASRModel):
         self.model = WhisperModel(**model_kwargs)
 
         # Load tiny model for fast language detection
-        self.language_detector = WhisperModel(
-            "tiny", device=CONFIG.DEVICE, compute_type=CONFIG.MODEL_QUANTIZATION, download_root=CONFIG.MODEL_PATH
-        )
+        tiny_model_kwargs = {
+            "model_size_or_path": "tiny",
+            "device": CONFIG.DEVICE,
+            "compute_type": CONFIG.MODEL_QUANTIZATION,
+            "download_root": CONFIG.MODEL_PATH,
+        }
+        if CONFIG.HF_TOKEN:
+            tiny_model_kwargs["use_auth_token"] = CONFIG.HF_TOKEN
+
+        self.language_detector = WhisperModel(**tiny_model_kwargs)
 
         # Pre-warm both models
         self._warmup_model()

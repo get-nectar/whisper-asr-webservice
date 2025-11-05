@@ -38,7 +38,7 @@ try:
     # Add HF token if provided (for private/gated models)
     if CONFIG.HF_TOKEN:
         print("Using Hugging Face authentication token")
-        model_kwargs["token"] = CONFIG.HF_TOKEN
+        model_kwargs["use_auth_token"] = CONFIG.HF_TOKEN
 
     model = WhisperModel(**model_kwargs)
     
