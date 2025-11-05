@@ -25,6 +25,7 @@ class FasterWhisperASR(ASRModel):
         }
 
         if CONFIG.HF_TOKEN:
+            print(f"🔑 Using HF token: {CONFIG.HF_TOKEN}")
             model_kwargs["use_auth_token"] = CONFIG.HF_TOKEN
 
         # Add L4-specific optimizations
