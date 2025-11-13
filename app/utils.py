@@ -117,7 +117,6 @@ async def load_audio(file: BinaryIO, encode=True, sr: int = CONFIG.SAMPLE_RATE):
             # Requires the ffmpeg CLI and `ffmpeg-python` package to be installed.
             ffmpeg_cmd = (
                 ffmpeg.input("pipe:", threads=0)
-                .filter("atempo", 2.0)
                 .output("-", format="s16le", acodec="pcm_s16le", ac=1, ar=sr)
                 .compile(cmd="ffmpeg")
             )

@@ -205,7 +205,7 @@ class FasterWhisperASR(ASRModel):
                 "language": options_dict.get("language", info.language),
                 "segments": segments,
                 "text": text,
-                "audio_duration": audio_duration * 2,
+                "audio_duration": audio_duration,
                 "confidence": overall_confidence,
             }
 
