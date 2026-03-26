@@ -103,10 +103,10 @@ if path.exists(assets_path + "/swagger-ui.css") and path.exists(assets_path + "/
 # pre-request hook for authentication
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    if request.url.path.startswith("/"):
+    EXCLUDED_PATHS = {"/", "/health", "/ready", "/docs", "/openapi.json", "/redoc"}
+    if request.url.path in EXCLUDED_PATHS or not CONFIG.API_KEY:
         return await call_next(request)
 
-    # check if the request header contains the correct token
     if request.headers.get("Authorization") != f"Bearer {CONFIG.API_KEY}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -216,6 +216,7 @@ async def asr(
 
 class SourceUriBody(BaseModel):
     source_uri: str
+    prompt: Optional[str] = None
 
 
 @app.post("/asr-source-uri", tags=["Endpoints"])
@@ -293,7 +294,7 @@ async def asr_source_uri(body: SourceUriBody):
         audio_data,
         "transcribe",
         None,
-        None,
+        body.prompt,
         True,
         True,
         None,
